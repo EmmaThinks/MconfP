@@ -1,0 +1,7 @@
+[package]
+name = "MconfP"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ddc-hi = "0.4.1"
