@@ -1,5 +1,5 @@
 use ddc_hi::{Ddc, Display};
-use std::{error::Error, io::Write};
+use std::{error::Error, io::Write, thread};
 
 fn main() -> Result<(), Box<dyn Error>> {
     // REFACTORIZATION OF MY MCONFIG SCRIPT FOR MONITOR CONTROLS
@@ -20,11 +20,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         match arg.as_str() {
             "--show-displays" | "-sd" => {
                 println!("Detected Monitors:");
-                for dis in &mut Display::enumerate() {
+                for mut dis in Display::enumerate() {
                     dis.update_capabilities()?;
                     println!(
                         "{}",
-                        dis.info.model_name.as_deref().unwrap_or("Unnamed monitor")
+                        dis.info
+                            .model_name
+                            .unwrap_or_else(|| "Unnamed monitor".to_string())
                     );
                 }
             }
@@ -33,22 +35,60 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .next()
                     .ok_or("No argument given at --change-brightness / -cb")?
                     .parse::<u16>()?;
+                let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
 
-                for dis in &mut Display::enumerate() {
-                    dis.update_capabilities()?;
-                    dis.handle.set_vcp_feature(0x10, bgr_amount)?;
-                    println!(
-                        "Monitor {:?}: Brightness set to: {}",
-                        dis.info.model_name.as_deref().unwrap_or("Unnamed monitor"),
-                        bgr_amount
-                    );
+                for mut dis in Display::enumerate() {
+                    let handle = thread::spawn(move || {
+                        dis.update_capabilities()
+                            .map_err(|e| format!("Unable to update capabilities: {e}"))?;
+
+                        let name = dis.info.model_name.unwrap_or_else(|| "Unnamed".to_string());
+                        dis.handle.set_vcp_feature(0x10, bgr_amount).map_err(|e| {
+                            format!("Failed to change Monitor: {name} brightness, {e}")
+                        })?;
+                        println!("Changed Monitor {name} brightness to: {bgr_amount}");
+                        Ok(())
+                    });
+
+                    handles.push(handle);
+                }
+
+                for h in handles {
+                    match h.join() {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => eprintln!("Thread OK, Error inside thread: {e}"),
+                        Err(_) => eprintln!("Thread panicked while trying to change brightness"),
+                    };
                 }
             }
             "--turn-off-monitors" | "-turnOff" => {
                 println!("Shutting down Monitors");
-                for dis in &mut Display::enumerate() {
-                    dis.update_capabilities()?;
-                    dis.handle.set_vcp_feature(0xD6, 0x04)?
+                let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
+
+                for mut dis in Display::enumerate() {
+                    let handle = thread::spawn(move || -> Result<(), String> {
+                        dis.update_capabilities().map_err(|e| 
+                            format!("Unable to Update capabilities when trying to turn off monitors: {e}")
+                        )?;
+
+                        let name = dis.info.model_name.unwrap_or_else(|| "Unnamed".to_string());
+                        dis.handle.set_vcp_feature(0xD6, 0x04).map_err(|e|
+                            format!("Unable to turn off monitor: {name}, Error: {e}")
+                        )?;
+                        Ok(())
+                    });
+
+                    handles.push(handle);
+                }
+
+                for h in handles {
+                    match h.join() {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => eprintln!("Thread OK, Error inside thread: {e}"),
+                        Err(_) => {
+                            eprintln!("Thread panicked while trying to turn off monitors");
+                        }
+                    };
                 }
             }
             "--help" | "-h" => {
