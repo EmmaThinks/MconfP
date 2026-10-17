@@ -4,4 +4,4 @@ version = "1.1.0"
 edition = "2024"
 
 [dependencies]
-ddc-hi = "0.4.1"
+ddc-i2c = "0.2.2"

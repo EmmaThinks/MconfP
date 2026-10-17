@@ -1,14 +1,80 @@
-use ddc_hi::{Ddc, Display};
-use std::{error::Error, io::Write, thread};
+use std::{
+    env::{Args, args},
+    error::Error,
+    iter::Skip,
+};
+
+use crate::monitor::{help, set_brightness, show_displays, turn_off};
+mod monitor;
+
+pub struct Config {
+    pub targets: Vec<String>,
+    pub commands: Vec<Command>,
+}
+
+pub enum Command {
+    ShowDisplays,
+    SetBrightness(u16),
+    TurnOff,
+    Help,
+    Err(String),
+}
+
+fn parse_args(args: &mut Skip<Args>) -> Config {
+    let mut flags: Vec<Command> = vec![];
+    let mut tars: Vec<String> = vec![];
+
+    for arg in args {
+        if let Some((flag_name, value)) = arg.split_once(':') {
+            match flag_name {
+                "--change-brightness" | "-cb" => match value.parse::<u16>() {
+                    Ok(v) => flags.push(Command::SetBrightness(v)),
+                    Err(e) => flags.push(Command::Err(e.to_string())),
+                },
+                "--target" | "-t" => {
+                    tars.extend(value.split(',').map(String::from));
+                }
+                _ => {
+                    let err_msg = format!(
+                        "'{flag_name}' appears to be an unknown flag, consider using: --help to see the full list of flags"
+                    );
+                    flags.push(Command::Err(err_msg))
+                }
+            }
+        } else {
+            match arg.as_str() {
+                "--show-displays" | "-sd" => flags.push(Command::ShowDisplays),
+                "--turn-off-monitors" | "-turnOff" => flags.push(Command::TurnOff),
+                "--help" | "-h" => flags.push(Command::Help),
+                _ => flags.push(Command::Err(String::from(
+                    "flag not found, consider using --help to see available",
+                ))),
+            };
+        }
+    }
+
+    Config {
+        targets: tars,
+        commands: flags,
+    }
+}
+
+fn exec_commands(conf: Config) -> Result<(), Box<dyn Error>> {
+    for cmd in conf.commands {
+        match cmd {
+            Command::ShowDisplays => show_displays()?,
+            Command::Help => help()?,
+            Command::TurnOff => turn_off(&conf.targets)?,
+            Command::SetBrightness(val) => set_brightness(&conf.targets, val)?,
+            Command::Err(e) => eprintln!("Argument Error: {e}"),
+        }
+    }
+
+    Ok(())
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // REFACTORIZATION OF MY MCONFIG SCRIPT FOR MONITOR CONTROLS
-    //
-    // !!!IMPORTANT!!!
-    // MAKE SURE YOUR USER IS ALLOWED IN THE i2c GROUP, OTHERWISE THIS SCRIPT WON'T WORK
-    //
-
-    let mut args = std::env::args().skip(1);
+    let mut args = args().skip(1);
     if args.len() == 0 {
         println!(
             "Make sure to provide arguments! use --help or -h after calling the script to see the available flags"
@@ -16,100 +82,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }
 
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--show-displays" | "-sd" => {
-                println!("Detected Monitors:");
-                for mut dis in Display::enumerate() {
-                    dis.update_capabilities()?;
-                    println!(
-                        "{}",
-                        dis.info
-                            .model_name
-                            .unwrap_or_else(|| "Unnamed monitor".to_string())
-                    );
-                }
-            }
-            "--change-brightness" | "-cb" => {
-                let bgr_amount = args
-                    .next()
-                    .ok_or("No argument given at --change-brightness / -cb")?
-                    .parse::<u16>()?;
-                let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
-
-                for mut dis in Display::enumerate() {
-                    let handle = thread::spawn(move || {
-                        dis.update_capabilities()
-                            .map_err(|e| format!("Unable to update capabilities: {e}"))?;
-
-                        let name = dis.info.model_name.unwrap_or_else(|| "Unnamed".to_string());
-                        dis.handle.set_vcp_feature(0x10, bgr_amount).map_err(|e| {
-                            format!("Failed to change Monitor: {name} brightness, {e}")
-                        })?;
-                        println!("Changed Monitor {name} brightness to: {bgr_amount}");
-                        Ok(())
-                    });
-
-                    handles.push(handle);
-                }
-
-                for h in handles {
-                    match h.join() {
-                        Ok(Ok(())) => {}
-                        Ok(Err(e)) => eprintln!("Thread OK, Error inside thread: {e}"),
-                        Err(_) => eprintln!("Thread panicked while trying to change brightness"),
-                    };
-                }
-            }
-            "--turn-off-monitors" | "-turnOff" => {
-                println!("Shutting down Monitors");
-                let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
-
-                for mut dis in Display::enumerate() {
-                    let handle = thread::spawn(move || -> Result<(), String> {
-                        dis.update_capabilities().map_err(|e| 
-                            format!("Unable to Update capabilities when trying to turn off monitors: {e}")
-                        )?;
-
-                        let name = dis.info.model_name.unwrap_or_else(|| "Unnamed".to_string());
-                        dis.handle.set_vcp_feature(0xD6, 0x04).map_err(|e|
-                            format!("Unable to turn off monitor: {name}, Error: {e}")
-                        )?;
-                        Ok(())
-                    });
-
-                    handles.push(handle);
-                }
-
-                for h in handles {
-                    match h.join() {
-                        Ok(Ok(())) => {}
-                        Ok(Err(e)) => eprintln!("Thread OK, Error inside thread: {e}"),
-                        Err(_) => {
-                            eprintln!("Thread panicked while trying to turn off monitors");
-                        }
-                    };
-                }
-            }
-            "--help" | "-h" => {
-                print!(
-                    "\nMconfP is a simple script for monitor management in terminal interfaces\n
-    Flags:\n
-        --show-displays | -sd                           Display the name of detected Monitors\n
-        --change-brightness <value> | -cb <value>       Change the brightness of all detected Monitors\n
-        --turn-off-monitors | -turnOff                  Turn off all detected Monitors\n
-        --help | -h                                     Display this message\n
-
-    ! IMPORTANT ! Before executing any command, make sure that your user is allowed in the i2c group, otherwise the script won't work\n\n"
-                );
-
-                std::io::stdout().flush()?;
-            }
-            _ => println!(
-                "Provide valid arguments, use -h / --help to see the available flags for this script"
-            ),
-        }
-    }
-
+    exec_commands(parse_args(&mut args))?;
     Ok(())
 }
