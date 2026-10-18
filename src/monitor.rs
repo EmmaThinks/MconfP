@@ -18,6 +18,6 @@ pub fn set_brightness(targets: &Vec<String>, val: u16) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-pub fn turn_off(target: &Vec<String>) -> Result<(), Box<dyn Error>> {
+pub fn turn_off(targets: &Vec<String>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }

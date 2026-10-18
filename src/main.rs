@@ -4,8 +4,12 @@ use std::{
     iter::Skip,
 };
 
-use crate::monitor::{help, set_brightness, show_displays, turn_off};
+use crate::{
+    monitor::{help, set_brightness, show_displays, turn_off},
+    name_checker::fetch_names,
+};
 mod monitor;
+mod name_checker;
 
 pub struct Config {
     pub targets: Vec<String>,
@@ -60,6 +64,12 @@ fn parse_args(args: &mut Skip<Args>) -> Config {
 }
 
 fn exec_commands(conf: Config) -> Result<(), Box<dyn Error>> {
+    // comprobation, routes, etc will be made here before passsing the routes to the functions
+
+    let displays = fetch_names(&conf.targets)?;
+
+    println!("{displays:#?}");
+
     for cmd in conf.commands {
         match cmd {
             Command::ShowDisplays => show_displays()?,
