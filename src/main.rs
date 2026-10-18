@@ -4,9 +4,11 @@ use std::{
     iter::Skip,
 };
 
+use ddc_hi::Display;
+
 use crate::{
     monitor::{help, set_brightness, show_displays, turn_off},
-    name_checker::fetch_names,
+    name_checker::fetch_name,
 };
 mod monitor;
 mod name_checker;
@@ -64,18 +66,14 @@ fn parse_args(args: &mut Skip<Args>) -> Config {
 }
 
 fn exec_commands(conf: Config) -> Result<(), Box<dyn Error>> {
-    // comprobation, routes, etc will be made here before passsing the routes to the functions
+    let displays = fetch_name(&conf.targets)?;
 
-    let displays = fetch_names(&conf.targets)?;
-
-    println!("{displays:#?}");
-
-    for cmd in conf.commands {
+    for cmd in &conf.commands {
         match cmd {
             Command::ShowDisplays => show_displays()?,
             Command::Help => help()?,
-            Command::TurnOff => turn_off(&conf.targets)?,
-            Command::SetBrightness(val) => set_brightness(&conf.targets, val)?,
+            Command::TurnOff => turn_off(&displays)?,
+            Command::SetBrightness(val) => set_brightness(&displays, &val)?,
             Command::Err(e) => eprintln!("Argument Error: {e}"),
         }
     }
@@ -85,12 +83,12 @@ fn exec_commands(conf: Config) -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = args().skip(1);
-    if args.len() == 0 {
+    /* if args.len() == 0 {
         println!(
             "Make sure to provide arguments! use --help or -h after calling the script to see the available flags"
         );
         std::process::exit(1);
-    }
+    }*/
 
     exec_commands(parse_args(&mut args))?;
     Ok(())
