@@ -67,6 +67,7 @@ fn parse_args(args: &mut Skip<Args>) -> Config {
 
 fn exec_commands(conf: Config) -> Result<(), Box<dyn Error>> {
     let displays = fetch_name(&conf.targets)?;
+    println!("{displays:#?}");
 
     for cmd in &conf.commands {
         match cmd {

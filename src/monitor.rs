@@ -4,6 +4,8 @@
 
 use ddc_hi::{self, Display};
 use std::error::Error;
+use std::fs::{read_dir};
+use std::io::{self, Write};
 
 // flags with no value
 pub fn show_displays() -> Result<(), Box<dyn Error>> {
@@ -13,12 +15,12 @@ pub fn show_displays() -> Result<(), Box<dyn Error>> {
             .info
             .model_name
             .unwrap_or_else(|| "Unnamed Monitor".to_string());
-        let id = ds.info.id.chars().last().ok_or("No id Found")?;
+        let id = ds.info.id.chars().last().ok_or("No id Found (probably an integrated monitor)")?;
 
         print!("MONITOR:\nModel Name: {mod_name}\nId: {id}\n\n");
     }
     println!(
-        "Note: To target specific monitors with --target: (-t), you can use either their id or model name\nIf you want to target an integrated monitor (eDP) you can use the 'int' keyword\n"
+        "Note: To target specific monitors with --target: (-t), you can use either their id or model name\nIf you want to target an integrated monitor (eDP) you can use the 'int' keyword (DO NOT USE ID TO TARGET INTEGRATED MONITORS)\n"
     );
     Ok(())
 }
@@ -29,10 +31,32 @@ pub fn help() -> Result<(), Box<dyn Error>> {
 
 // flags with value/target
 pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Error>> {
-    if targets.contains(&"all".to_string()) {}
+    // targeting integrated monitors
+    if targets.contains(&"all".to_string())
+        || targets.contains(&"int".to_string())
+        || targets.is_empty()
+    {
+        let path = "/sys/class/backlight";
+        let entry = read_dir(path)?
+            .filter_map(|e| e.ok())
+            .find(|e| e.path().is_dir())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No backlight device found"));
+
+        let path = entry?.path().join("brightness");
+        let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
+        let val_per = val * 192;
+        file.write_all(&val_per.to_string().into_bytes())?;
+    }
 
     for mut dis in Display::enumerate() {
-        dis.update_capabilities()?;
+        match dis.update_capabilities() {
+            Ok(_) => {
+                
+            },
+            Err(_) => {
+                break;
+            },
+        };
     }
     Ok(())
 }
