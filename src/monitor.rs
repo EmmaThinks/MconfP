@@ -26,6 +26,19 @@ pub fn show_displays() -> Result<(), Box<dyn Error>> {
 }
 
 pub fn help() -> Result<(), Box<dyn Error>> {
+    print!(
+                    "\nMconfP is a simple script for monitor management in terminal interfaces\n
+    Flags:\n
+        --show-displays | -sd                           Display the name of detected Monitors\n
+        --change-brightness:<value> | -cb:<value>       Change the brightness of detected Monitors\n
+        --target:<monitor> | -t:<monitor>               Apply the configuration only to selected monitors\n
+        --turn-off-monitors | -turnOff                  Turn off detected Monitors\n
+        --help | -h                                     Display this message\n
+
+    ! IMPORTANT ! Before executing any command, take in mind that you'll need sudo permissions while executing the script (using sudo before executing this script)\n\n"
+                );
+
+                std::io::stdout().flush()?;
     Ok(())
 }
 
@@ -48,6 +61,7 @@ pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Er
         file.write_all(&val_per.to_string().into_bytes())?;
     }
 
+    // normal function to target external monitors (might need some optimizations)
     for mut dis in Display::enumerate() {
         match dis.update_capabilities() {
             Ok(_) => {
@@ -56,7 +70,7 @@ pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Er
             Err(_) => {
                 break;
             },
-        };
+        }; 
     }
     Ok(())
 }
