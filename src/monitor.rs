@@ -6,6 +6,7 @@ use ddc_hi::{self, Ddc, Display};
 use std::error::Error;
 use std::fs::{read_dir};
 use std::io::{self, Write};
+use std::sync::Arc;
 
 // flags with no value
 pub fn show_displays() -> Result<(), Box<dyn Error>> {
@@ -43,7 +44,7 @@ pub fn help() -> Result<(), Box<dyn Error>> {
 }
 
 // flags with value/target
-pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Error>> {
+pub fn set_brightness(targets: &Arc<[String]>, val: &u16) -> Result<(), Box<dyn Error>> {
     // targeting integrated monitors
     if targets.contains(&"all".to_string())
         || targets.contains(&"int".to_string())
@@ -78,7 +79,7 @@ pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Er
     Ok(())
 }
 
-pub fn turn_off(targets: &Vec<String>) -> Result<(), Box<dyn Error>> {
+pub fn turn_off(targets: &Arc<[String]>) -> Result<(), Box<dyn Error>> {
     if targets.contains(&"int".to_string()) {
         println!("integrated monitors cannot be turned off");
     }

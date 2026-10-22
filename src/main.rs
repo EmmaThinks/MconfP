@@ -1,5 +1,6 @@
 use std::{
-    env::{Args, args}, error::Error, iter::Skip, thread,
+    env::{Args, args}, iter::Skip, thread,
+    sync::Arc,
 };
 
 use crate::{
@@ -64,7 +65,8 @@ fn parse_args(args: &mut Skip<Args>) -> Config {
 fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
     
     let displays = fetch_name(&conf.targets)?;
-    println!("{displays:#?}");
+    let shared_displays: Arc<[String]> = Arc::from(displays);
+    println!("{shared_displays:#?}");
 
     let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
 
@@ -73,8 +75,9 @@ fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
             Command::ShowDisplays => show_displays()?,
             Command::Help => help()?,
             Command::TurnOff => {
+                let cloned_arc = Arc::clone(&shared_displays);
                 let handle = thread::spawn(move || {
-                    turn_off(&displays).map_err(|e| {
+                    turn_off(&cloned_arc).map_err(|e| {
                         format!("Error: {e}")
                     })?;
                     Ok(())
@@ -82,8 +85,10 @@ fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
                 handles.push(handle);
             },
             Command::SetBrightness(val) => {
+                let cloned_arc = Arc::clone(&shared_displays);
+                let val = val.clone();
                 let handle = thread::spawn(move || {
-                    set_brightness(&displays, &val).map_err(|e| {
+                    set_brightness(&cloned_arc, &val).map_err(|e| {
                         format!("Error: {e}")
                     })?;
                     Ok(())
