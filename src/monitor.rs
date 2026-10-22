@@ -101,7 +101,7 @@ pub fn turn_off(targets: &[String]) -> Result<(), Box<dyn Error>> {
         if is_targeted {
             match dis.handle.set_vcp_feature(0xD6, 0x04) {
                 Ok(_) => {
-                    println!("Turning off monitor: {}", dis.info.model_name.unwrap_or_else(|| "TUnknown Monitor".to_string()));
+                    println!("Turning off monitor: {}", dis.info.model_name.unwrap_or_else(|| "Unknown Monitor".to_string()));
                 },
                 Err(e) => {
                     println!("Failed to turn off monitor with id: {}\nErr: {e}", dis.info.id)
