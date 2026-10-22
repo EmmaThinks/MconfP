@@ -2,10 +2,11 @@
 //    Ok(())
 //}
 
-use ddc_hi::{self, Display};
+use ddc_hi::{self, Ddc, Display};
 use std::error::Error;
 use std::fs::{read_dir};
 use std::io::{self, Write};
+use std::ops::Deref;
 
 // flags with no value
 pub fn show_displays() -> Result<(), Box<dyn Error>> {
@@ -61,16 +62,19 @@ pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Er
         file.write_all(&val_per.to_string().into_bytes())?;
     }
 
+
     // normal function to target external monitors (might need some optimizations)
     for mut dis in Display::enumerate() {
-        match dis.update_capabilities() {
-            Ok(_) => {
-                
-            },
-            Err(_) => {
-                break;
-            },
-        }; 
+        if targets.contains(&dis.info.id) || targets.is_empty() || targets.contains(&"all".to_string()) { 
+            match dis.handle.set_vcp_feature(0x10, *val) {
+                Ok(_) => {
+                    println!("Monitor: '{}', set brightness to {val}", dis.info.model_name.ok_or("Unnamed Monitor".to_string())?);
+                },
+                Err(e) => {
+                    println!("Error trying to set vcp feature: {e}");
+                }
+            };
+        } 
     }
     Ok(())
 }
