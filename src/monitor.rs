@@ -6,7 +6,6 @@ use ddc_hi::{self, Ddc, Display};
 use std::error::Error;
 use std::fs::{read_dir};
 use std::io::{self, Write};
-use std::sync::Arc;
 
 // flags with no value
 pub fn show_displays() -> Result<(), Box<dyn Error>> {
@@ -44,7 +43,7 @@ pub fn help() -> Result<(), Box<dyn Error>> {
 }
 
 // flags with value/target
-pub fn set_brightness(targets: &Arc<[String]>, val: &u16) -> Result<(), Box<dyn Error>> {
+pub fn set_brightness(targets: &[String], val: u16) -> Result<(), Box<dyn Error>> {
     // targeting integrated monitors
     if targets.contains(&"all".to_string())
         || targets.contains(&"int".to_string())
@@ -56,19 +55,28 @@ pub fn set_brightness(targets: &Arc<[String]>, val: &u16) -> Result<(), Box<dyn 
             .find(|e| e.path().is_dir())
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No backlight device found"));
 
-        let path = entry?.path().join("brightness");
-        let mut file = std::fs::OpenOptions::new().write(true).open(path)?;
-        let val_per = val * 192;
-        file.write_all(&val_per.to_string().into_bytes())?;
+        let entry_path = entry?.path();
+        let max_raw = std::fs::read_to_string(entry_path.join("max_brightness"))?;
+        let max_brightness: u32 = max_raw.trim().parse().unwrap_or(255);
+
+        let final_val = ((val as u32) * max_brightness) / 100;
+
+        let mut file = std::fs::OpenOptions::new().write(true).open(entry_path.join("brightness"))?;
+        file.write_all(final_val.to_string().as_bytes())?;
     }
 
 
     // normal function to target external monitors (might need some optimizations)
     for mut dis in Display::enumerate() {
-        if targets.contains(&dis.info.id) || targets.is_empty() || targets.contains(&"all".to_string()) { 
-            match dis.handle.set_vcp_feature(0x10, *val) {
+        let id = dis.info.id.chars().last().map(|c| c.to_string());
+        let is_targeted = targets.is_empty() 
+            || targets.contains(&"all".to_string())
+            || id.as_ref().map_or(false, |i| targets.contains(i));
+
+        if is_targeted {
+            match dis.handle.set_vcp_feature(0x10, val) {
                 Ok(_) => {
-                    println!("Monitor: '{}', set brightness to {val}", dis.info.model_name.ok_or(format!("Unknown Monitor, set brightness to {val}"))?);
+                    println!("Monitor: '{}', set brightness to {val}", dis.info.model_name.unwrap_or_else(|| "Unknown Monitor".to_string()));
                 },
                 Err(e) => {
                     println!("Error trying to set vcp feature: {e}");
@@ -79,16 +87,21 @@ pub fn set_brightness(targets: &Arc<[String]>, val: &u16) -> Result<(), Box<dyn 
     Ok(())
 }
 
-pub fn turn_off(targets: &Arc<[String]>) -> Result<(), Box<dyn Error>> {
+pub fn turn_off(targets: &[String]) -> Result<(), Box<dyn Error>> {
     if targets.contains(&"int".to_string()) {
         println!("integrated monitors cannot be turned off");
     }
 
     for mut dis in Display::enumerate() {
-        if targets.contains(&dis.info.id) || targets.contains(&"all".to_string()) || targets.is_empty() {
-            match dis.handle.set_vcp_feature(0xD6, 0x04 /*code for turning off a monitor*/) {
+        let id = dis.info.id.chars().last().map(|c| c.to_string());
+        let is_targeted = targets.is_empty() 
+            || targets.contains(&"all".to_string())
+            || id.as_ref().map_or(false, |i| targets.contains(i));
+
+        if is_targeted {
+            match dis.handle.set_vcp_feature(0xD6, 0x04) {
                 Ok(_) => {
-                    println!("Turning off monitor: {}", dis.info.model_name.ok_or(format!("Turning off: Unknown Monitor"))?);
+                    println!("Turning off monitor: {}", dis.info.model_name.unwrap_or_else(|| "TUnknown Monitor".to_string()));
                 },
                 Err(e) => {
                     println!("Failed to turn off monitor with id: {}\nErr: {e}", dis.info.id)

@@ -88,7 +88,7 @@ fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
                 let cloned_arc = Arc::clone(&shared_displays);
                 let val = val.clone();
                 let handle = thread::spawn(move || {
-                    set_brightness(&cloned_arc, &val).map_err(|e| {
+                    set_brightness(&cloned_arc, val).map_err(|e| {
                         format!("Error: {e}")
                     })?;
                     Ok(())
@@ -111,12 +111,12 @@ fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = args().skip(1);
-    /* if args.len() == 0 {
+    if args.len() == 0 {
         println!(
             "Make sure to provide arguments! use --help or -h after calling the script to see the available flags"
         );
         std::process::exit(1);
-    }*/
+    }
 
     exec_commands(parse_args(&mut args))?;
     Ok(())

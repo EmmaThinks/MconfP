@@ -5,3 +5,10 @@ edition = "2024"
 
 [dependencies]
 ddc-hi = "0.4.1"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
