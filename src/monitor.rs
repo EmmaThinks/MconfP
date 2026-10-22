@@ -47,7 +47,6 @@ pub fn set_brightness(targets: &[String], val: u16) -> Result<(), Box<dyn Error>
     // targeting integrated monitors
     if targets.contains(&"all".to_string())
         || targets.contains(&"int".to_string())
-        || targets.is_empty()
     {
         let path = "/sys/class/backlight";
         let entry = read_dir(path)?
