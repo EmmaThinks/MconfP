@@ -6,7 +6,6 @@ use ddc_hi::{self, Ddc, Display};
 use std::error::Error;
 use std::fs::{read_dir};
 use std::io::{self, Write};
-use std::ops::Deref;
 
 // flags with no value
 pub fn show_displays() -> Result<(), Box<dyn Error>> {
@@ -68,7 +67,7 @@ pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Er
         if targets.contains(&dis.info.id) || targets.is_empty() || targets.contains(&"all".to_string()) { 
             match dis.handle.set_vcp_feature(0x10, *val) {
                 Ok(_) => {
-                    println!("Monitor: '{}', set brightness to {val}", dis.info.model_name.ok_or("Unnamed Monitor".to_string())?);
+                    println!("Monitor: '{}', set brightness to {val}", dis.info.model_name.ok_or(format!("Unknown Monitor, set brightness to {val}"))?);
                 },
                 Err(e) => {
                     println!("Error trying to set vcp feature: {e}");
@@ -80,5 +79,21 @@ pub fn set_brightness(targets: &Vec<String>, val: &u16) -> Result<(), Box<dyn Er
 }
 
 pub fn turn_off(targets: &Vec<String>) -> Result<(), Box<dyn Error>> {
+    if targets.contains(&"int".to_string()) {
+        println!("integrated monitors cannot be turned off");
+    }
+
+    for mut dis in Display::enumerate() {
+        if targets.contains(&dis.info.id) || targets.contains(&"all".to_string()) || targets.is_empty() {
+            match dis.handle.set_vcp_feature(0xD6, 0x04 /*code for turning off a monitor*/) {
+                Ok(_) => {
+                    println!("Turning off monitor: {}", dis.info.model_name.ok_or(format!("Turning off: Unknown Monitor"))?);
+                },
+                Err(e) => {
+                    println!("Failed to turn off monitor with id: {}\nErr: {e}", dis.info.id)
+                }
+            }
+        }
+    }
     Ok(())
 }

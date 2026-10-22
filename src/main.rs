@@ -1,10 +1,6 @@
 use std::{
-    env::{Args, args},
-    error::Error,
-    iter::Skip,
+    env::{Args, args}, error::Error, iter::Skip, thread,
 };
-
-use ddc_hi::Display;
 
 use crate::{
     monitor::{help, set_brightness, show_displays, turn_off},
@@ -65,24 +61,50 @@ fn parse_args(args: &mut Skip<Args>) -> Config {
     }
 }
 
-fn exec_commands(conf: Config) -> Result<(), Box<dyn Error>> {
+fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
+    
     let displays = fetch_name(&conf.targets)?;
     println!("{displays:#?}");
+
+    let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
 
     for cmd in &conf.commands {
         match cmd {
             Command::ShowDisplays => show_displays()?,
             Command::Help => help()?,
-            Command::TurnOff => turn_off(&displays)?,
-            Command::SetBrightness(val) => set_brightness(&displays, &val)?,
+            Command::TurnOff => {
+                let handle = thread::spawn(move || {
+                    turn_off(&displays).map_err(|e| {
+                        format!("Error: {e}")
+                    })?;
+                    Ok(())
+                });
+                handles.push(handle);
+            },
+            Command::SetBrightness(val) => {
+                let handle = thread::spawn(move || {
+                    set_brightness(&displays, &val).map_err(|e| {
+                        format!("Error: {e}")
+                    })?;
+                    Ok(())
+                });
+                handles.push(handle);
+            },
             Command::Err(e) => eprintln!("Argument Error: {e}"),
         }
     }
 
+    for h in handles {
+        match h.join() {
+            Ok(Ok(_)) => {},
+            Ok(Err(e)) => eprintln!("Thread OK, Error inside thread: {e}"),
+            Err(e) => eprintln!("Thread panicked: {e:?}")
+        }
+    }
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = args().skip(1);
     /* if args.len() == 0 {
         println!(
