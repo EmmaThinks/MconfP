@@ -66,7 +66,6 @@ fn exec_commands(conf: Config) -> Result<(), Box<dyn std::error::Error>> {
     
     let displays = fetch_name(&conf.targets)?;
     let shared_displays: Arc<[String]> = Arc::from(displays);
-    println!("{shared_displays:#?}");
 
     let mut handles: Vec<thread::JoinHandle<Result<(), String>>> = Vec::new();
 
